@@ -1,4 +1,36 @@
 function EEGOUT = feature_extract(EEGIN)
+    EEG = EEGIN;
+    freq = file2freq(EEG.type);
+    if length(freq)==0
+       return
+    end
+       
+    [ch_num,sample_num,epoch_num] = size(EEG);
+    r = [];
+    B = [];
+    U = [];
+    W = [];
+
+    for epochIdx=1:epoch_num
+        eegData = EEG.data(:,:,epochIdx)'; 
+        [AOUT,BOUT,rOUT,UOUT,VOUT] = CCA_feaext(eegData,EEG.srate,freq);  
+        r = cat(3,r,rOUT);
+        B = cat(3,B,BOUT);
+        U = cat(3,U,UOUT');
+        if ch_num ~=1
+           W =  cat(3,W,AOUT);
+        end
+    end
+    if ch_num ~=1
+        EEG.Weight = permute(W,[1,4,3,2]);
+    end        
+    EEG.FeaCor = r;
+    EEG.FeaBeta = B;
+    
+    EEGOUT = EEG;
+
+
+function EEGOUT = feature_extract_ORI(EEGIN)
     option_num = length(EEGIN);
     list = SbjMapping(EEGIN);
     EEGOUT = EEGIN;
@@ -15,6 +47,7 @@ function EEGOUT = feature_extract(EEGIN)
            EEGOUT{option}.dataset{file} = EEG;
        end
     end
+  
     
 %% CCA feature extraction mathod applied on enhanced and unenhanced signal 
 function EEG = CCA_extraction(EEGIN,EEG,list)
@@ -57,12 +90,31 @@ function EEG = CCA_extraction(EEGIN,EEG,list)
         EEG.([erase(fieldName{DataIndex(method)},'data') 'FeaBeta']) = B;
     end
     
+%% CCA sinusoidal reference feature extraction function 
+function  [AOUT,BOUT,rOUT,UOUT,VOUT] = CCA_feaext(eeg,fs,freq) 
+    sample_num = size(eeg,1);  % Length of signal 
+    YRef = SinRef(sample_num,fs,freq);
+    [~,~,freq_num] = size(YRef);
+    AOUT = [];
+    BOUT = [];
+    rOUT = [];
+    UOUT = [];
+    VOUT = [];
+    for freq = 1:freq_num
+        Y = YRef(:,:,freq);
+        [A, B, r, U, V] = canoncorr(eeg,Y); %% this function input the data X, reference Y, output the CCA result      
+        AOUT = cat(2,AOUT,A(:,1));
+        BOUT = cat(2,BOUT,B(:,1));
+        rOUT = cat(2,rOUT,r(:,1));
+        UOUT = cat(2,UOUT,U(:,1));
+        VOUT = cat(2,VOUT,V(:,1));
+    end
     
 
     
     
 %% CCA sinusoidal reference feature extraction function 
-function  [AOUT,BOUT,rOUT,UOUT,VOUT] = CCA_feaext(eeg,fs,freq) 
+function  [AOUT,BOUT,rOUT,UOUT,VOUT] = CCA_feaext_ORI(eeg,fs,freq) 
     sample_num = size(eeg,1);  % Length of signal 
     YRef = SinRef(sample_num,fs,freq);
     [~,~,freq_num] = size(YRef);

@@ -1,5 +1,10 @@
 %% CCA simulated enhancement  with quardarture turn
 function EEGOUT = CCA_enhancement_quadra(EEGIN)
+   EEG = CCASimFun(EEGIN);
+   EEGOUT = EEG;
+end
+
+function EEGOUT = CCA_enhancement_quadra_ORI(EEGIN)
     EEGOUT = EEGIN;
     option_num = length(EEGIN);
     for option = 1:option_num
@@ -11,6 +16,7 @@ function EEGOUT = CCA_enhancement_quadra(EEGIN)
            EEGOUT{option}.dataset{file} = EEG;
        end
     end
+end
 
 %% enhancement function   
 function EEG = CCASimFun(EEG)
@@ -20,7 +26,7 @@ function EEG = CCASimFun(EEG)
     if length(freq)==0
         return 
     end
-    tmp_data = [];
+    tmp_data = []; 
     tmp_r = [];
     tmp_weight = [];
     
@@ -30,19 +36,33 @@ function EEG = CCASimFun(EEG)
         eeg = EEG.data(:,:,epoch)';
         [A,B,r,U,V] = CCA_sim(eeg,EEG.srate,fr,freq) ; 
         tmp_data = cat(3,tmp_data,U(:,1)');
-        tmp_r(end+1) = r(:,1);
+        tmp_r(end+1) = r(:,1); % store only the max corr. for each epoch
         tmp_weight = cat(3,tmp_weight,A(:,1));
     end
-    EEG.CCAQuadSimWeight = tmp_weight./std(tmp_data,[],2);
-    tmp_data = (tmp_data-mean(tmp_data,2));    
-    EEG.CCAQuadSimdata = tmp_data;
+    
+    % see https://www.mathworks.com/matlabcentral/answers/332663-array-dimensions-must-match-for-binary-array-op
+    % see https://www.mathworks.com/help/matlab/ref/bsxfun.html
+    % only Matlab 2016b and later and above will auto fix if A and B matrix doesn't
+    % match in size    
+    EEG.CCAQuadSimWeight = bsxfun(@rdivide, tmp_weight, std(tmp_data,[],2));
+%     EEG.CCAQuadSimWeight = tmp_weight./std(tmp_data,[],2);
+   
+    tmp_data = bsxfun(@minus, tmp_data, mean(tmp_data,2));
+%     tmp_data = (tmp_data-mean(tmp_data,2));    
+    EEG.CCAQuadSimData = tmp_data;
     EEG.CCAQuadSimEnhanCor = tmp_r;
     
+    % copy the original EEG.data into another field (just in case)
+    EEG.dataori = EEG.data;
+    EEG.data = EEG.CCAQuadSimData;
+end
+
 %% CCA simulated reference function 
 function [A,B,r,U,V] = CCA_sim(eeg,fs,fr,freq)  
     sample_num = size(eeg,1);  % Length of signal 
     YRef = SimRefQuar(fr,fs,sample_num,freq);
     [A, B, r, U, V] = canoncorr(eeg, YRef); %% this function input the data X, reference Y, output the CCA result  
+end
 
 %% simulation signal generation function 
 function ySample = SimRefQuar(fr,fs,sample_num,freq)  %paper reference: HR-SSVEP BCI, Visual Stimulus Design (Wang+Jung+ 2010)
@@ -64,3 +84,4 @@ function ySample = SimRefQuar(fr,fs,sample_num,freq)  %paper reference: HR-SSVEP
        y_quar(:,i) = [ySample(quar_delay(i)+1:end,i) ; ySample(1:quar_delay(i),i)];
     end
     ySample = [ySample y_quar];
+end
